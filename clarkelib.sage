@@ -660,16 +660,16 @@ class SpaceElevator(object):
 
         if hcw is None:
             if khcw is not None:
-                hcw = self.planet.HSYN*khcw
+                hcw = (self.planet.HSYN - self.planet.R)*khcw + self.planet.R
             else:
-                hcw = self.planet.HSYN*2
+                hcw = (self.planet.HSYN - self.planet.R)*2 + self.planet.R
         else:
+            hcw = hcw + self.planet.R
             if khcw is not None:
                 warnings.warn(_warn_msg[1])
             if hcw < self.planet.HSYN:
                 raise ValueError(_error_msg[8])
 
-        hcw = hcw + self.planet.R
         self.cw = Counterweight(hcw, self.planet)
         self.tether = Tether(rho, ss, ksafe, self.planet, self.cw, 
                              pull_force, anchor_force, taper_func, 
