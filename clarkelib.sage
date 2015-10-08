@@ -62,18 +62,18 @@ _error_msg = {
 
 }
 
-f0 = var('f0')			# Tether linear mass density in the anchor point
-rho = var('rho')		# Tether material density
-sigma = var('sigma')	# Tether material tensile strength
-ksafe = var('ksafe')	# Tether safety factor
-R = var('R')			# Planet radius
-HSYN = var('HSYN')		# Planet synchronous orbit absolute altitude (or radius)
-OMEGA = var('OMEGA')	# Planet angular velocity
-GM = var('GM')			# Planet gravity constant
-hcw = var('hcw')		# Counterweight absolute altitude
-ksyn = var('ksyn')		# Tapering coefficient on the synchronous orbit altitude
-kcw = var('kcw')		# Tapering coefficient on the counterweight altitude
-h = var('h')			# Variable for altitude
+f0 = var('f0')          # Tether linear mass density in the anchor point
+rho = var('rho')        # Tether material density
+sigma = var('sigma')    # Tether material tensile strength
+ksafe = var('ksafe')    # Tether safety factor
+R = var('R')            # Planet radius
+HSYN = var('HSYN')      # Planet synchronous orbit absolute altitude (or radius)
+OMEGA = var('OMEGA')    # Planet angular velocity
+GM = var('GM')          # Planet gravity constant
+hcw = var('hcw')        # Counterweight absolute altitude
+ksyn = var('ksyn')      # Tapering coefficient on the synchronous orbit altitude
+kcw = var('kcw')        # Tapering coefficient on the counterweight altitude
+h = var('h')            # Variable for altitude
 
 # Exponential tether tapering function
 _taperfunc_exp = f0*exp((GM*rho*ksafe/sigma)*(
@@ -257,7 +257,7 @@ class Tether(object):
                                                        ksyn=self.ksyn, 
                                                        kcw=self.kcw)
         else:
-        	self.tetherforce_low = self.force_low
+            self.tetherforce_low = self.force_low
 
         if self.tf_high != 'exp':
             self.tetherforce_high = self.force_high.subs(hcw=self.cw.hcw, 
@@ -265,7 +265,7 @@ class Tether(object):
                                                          ksyn=self.ksyn, 
                                                          kcw=self.kcw)
         else:
-        	self.tetherforce_high = self.force_high
+            self.tetherforce_high = self.force_high
 
     def _findForces(self, tether_parts = 'both', ksyn_fix=1):
 
@@ -627,8 +627,8 @@ class SpaceElevator(object):
                           anchor altitude (near the planet's surface) only.
     """
     def __init__(self, n_climbers=1, m_climber=0, anchor_force=100, 
-    			 planet='Earth', material='default', khcw=None, hcw=None,
-    			 taper_func=('exp', 'exp'), anchor_safe='heavy'):
+                 planet='Earth', material='default', khcw=None, hcw=None,
+                 taper_func=('exp', 'exp'), anchor_safe='heavy'):
 
         n_climbers = self._checkNumeric('n_climbers', n_climbers, int)
         if n_climbers<1:
@@ -670,6 +670,7 @@ class SpaceElevator(object):
             if hcw < self.planet.HSYN:
                 raise ValueError(_error_msg[8])
 
+        # hcw = hcw + self.planet.R
         self.cw = Counterweight(hcw, self.planet)
         self.tether = Tether(rho, ss, ksafe, self.planet, self.cw, 
                              pull_force, anchor_force, taper_func, 
@@ -773,7 +774,6 @@ class SpaceElevator(object):
                 m0_min = self.m0
                 hcw_m0min = self.cw.hcw
 
-            # hplot = hcw - self.planet.R
             self.plots.hcw_points.append(hcw)
             self.plots.m0_points.append(self.m0)
             self.plots.mcw_points.append(self.cw.mcw)
@@ -782,7 +782,7 @@ class SpaceElevator(object):
         self.plots.update(self)
         self.plots.hcw_max = hcw
 
-        return hcw_m0min
+        return hcw_m0min - self.planet.R
 
 
 class ResplotSE(object):
@@ -932,7 +932,7 @@ class ResplotSE(object):
         line_x = [hsyn, hsyn]
         line_y = [0., s2]
         plt.plot(line_x, line_y, color = '0.3', ls='--', linewidth = 2)
-        cm = (self.se.y0 + self.planet.HSYN)*1e-6
+        cm = (self.se.y0 + self.planet.HSYN - self.planet.R)*1e-6
         plt.plot([cm], [0.0], 'o', color='black', markersize=10)
         plt.text(cm, s2*0.1, "CM")
         plt.plot([hcw], [0.0], 'rs', markersize=20)
