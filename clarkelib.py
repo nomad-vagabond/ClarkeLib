@@ -134,7 +134,7 @@ _taperfunc_high_names = list(_taperfunc_high_makers.keys()) + ['exp']
 # Planet
 # ---------------------------------------------------------------------------
 
-class Planet(object):
+class Planet:
     """
     Planet of the solar system. Currently implemented Mars and Earth.
 
@@ -178,7 +178,7 @@ class Planet(object):
 # Counterweight
 # ---------------------------------------------------------------------------
 
-class Counterweight(object):
+class Counterweight:
     """Space Elevator counterweight."""
 
     def __init__(self, hcw, planet):
@@ -195,10 +195,43 @@ class Counterweight(object):
 
 
 # ---------------------------------------------------------------------------
+# Climber
+# ---------------------------------------------------------------------------
+
+class Climber:
+    """
+    Space Elevator climber positioned on the lower tether.
+
+    Parameters
+    ----------
+    mass   : float  – climber mass, kg
+    planet : Planet
+    h      : float  – absolute altitude of climber, m
+    h_top  : float  – absolute altitude of the top of this climber's segment, m
+    """
+
+    def __init__(self, mass, planet, h, h_top):
+        self.mass = float(mass)
+        self.h = float(h)           # absolute altitude, m
+        self.h_top = float(h_top)       # segment top (= next climber's h), m
+        self.altitude = self.h - planet.R      # altitude above surface, m
+        # Effective weight = gravity − centrifugal (≥ 0 below synchronous orbit)
+        self.force    = max(0.0, mass * planet.GM / h**2 - mass * planet.OMEGA**2 * h)
+
+    def __str__(self):
+        return (
+            f"Climber:\n"
+            f"  mass: {self.mass * 1e-3:.3f} t\n"
+            f"  altitude: {self.altitude * 1e-6:.3f} Mm\n"
+            f"  force: {self.force * 1e-3:.3f} kN"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Tether
 # ---------------------------------------------------------------------------
 
-class Tether(object):
+class Tether:
     """
     Space Elevator tether.
     Attributes with _low suffix: lower part (R <= h <= HSYN).
@@ -237,7 +270,7 @@ class Tether(object):
         if anchor_safe == 'heavy':
             anchor_pullforce = pull_force
         elif anchor_safe == 'light':
-            anchor_pullforce = anchor_force + climbers[0][0]
+            anchor_pullforce = anchor_force + climbers[0].force
         else:
             raise ValueError(_error_msg[1])
 
@@ -535,8 +568,7 @@ class Tether(object):
 
         cumulative_pull = self.anchor_force
         for climber in climbers:
-            climber_force, h_start, h_end = climber
-            cumulative_pull += climber_force
+            cumulative_pull += climber.force
             _pull = cumulative_pull  # capture by value
 
             def _fd(h, _p=_pull):
@@ -550,7 +582,7 @@ class Tether(object):
 
             self.climb_forcedist_low.append(_fd)
             self.climb_stressdist_low.append(_sd)
-            self.climber_sections.append((h_start, h_end))
+            self.climber_sections.append((climber.h, climber.h_top))
 
     def getEquilibriumAccuracy(self):
         """Return equilibrium residual (should be ~0), N."""
@@ -562,7 +594,7 @@ class Tether(object):
 # SpaceElevator
 # ---------------------------------------------------------------------------
 
-class SpaceElevator(object):
+class SpaceElevator:
     """
     Space Elevator main class.
 
@@ -609,7 +641,7 @@ class SpaceElevator(object):
                 raise ValueError(_error_msg[5])
 
         self.planet = Planet(planet)
-        self.getClimbersForce()
+        self.climbers_force_total = self.getClimbersForce()
         pull_force = anchor_force + self.climbers_force_total
 
         if hcw is None:
@@ -639,20 +671,17 @@ class SpaceElevator(object):
         except Exception:
             raise ValueError(erroer_msg)
 
-    def _getSingleClimberWeight(self, hclimber):
-        return (self.m_climber * self.planet.GM / hclimber**2
-                - self.m_climber * self.planet.OMEGA**2 * hclimber)
-
     def getClimbersForce(self):
         pl = self.planet
         hspace = np.linspace(pl.R, pl.HSYN, self.n_climbers + 1)
-        self.climbers_force_total = 0.0
+        climbers_force_total = 0.0
         self.climbers = []
         for i, hclimber in enumerate(hspace[:-1]):
-            climber_force = self._getSingleClimberWeight(hclimber)
-            topbound = hspace[i + 1]
-            self.climbers.append((climber_force, hclimber, topbound))
-            self.climbers_force_total += climber_force
+            cl = Climber(self.m_climber, pl, hclimber, hspace[i + 1])
+            self.climbers.append(cl)
+            climbers_force_total += cl.force
+
+        return climbers_force_total
 
     def _getMassCenter(self, th, cw):
         th.getTetherMass()
@@ -710,12 +739,68 @@ class SpaceElevator(object):
 
         return hcw_m0min - self.planet.R
 
+    def stats(self, digits=4):
+        """Pretty-print the same data as ResplotSE.showData(), as plain text."""
+        pl = self.planet
+        th = self.tether
+        cw = self.cw
+
+        ME   = float(5.97219e24)
+        T_hr = (2 * math.pi / pl.OMEGA) / 3600.0
+        hsyn = (pl.HSYN - pl.R) * 1e-6
+        hcw_ = (cw.hcw  - pl.R) * 1e-6
+        h0   = self.y0 + pl.HSYN - pl.R
+
+        w = 34
+        sep = '-' * w
+
+        def row(label, value):
+            print(f"  {label:<22} {value}")
+
+        print(sep)
+        print(f"  Planet: {pl.name}")
+        print(sep)
+        row("R, km",           round(pl.R * 1e-3,    digits))
+        row("M, M_Earth",      round(pl.M / ME,      digits))
+        row("T, hr",           round(T_hr,            digits))
+        row("h_syn, Mm",       round(hsyn,            digits))
+
+        print(sep)
+        print("  Tether")
+        print(sep)
+        row("Taper low",       th.tf_low)
+        row("Taper high",      th.tf_high)
+        row("sigma_b, MPa",    round(th.ts * 1e-6,   digits))
+        row("k_safe",          th.ksafe)
+        row("rho, kg/m3",      round(th.rho,         digits))
+        row("m_tether, tons",  round(th.m_tether * 1e-3, digits))
+        row("s1, mm2",         round(th.s1 * 1e6,    digits))
+        row("s2, mm2",         round(th.s2 * 1e6,    digits))
+        row("s3, mm2",         round(th.s3 * 1e6,    digits))
+        row("k_syn",           round(th.ksyn,         digits))
+        row("k_cw",            round(th.kcw,          digits))
+
+        print(sep)
+        print("  Counterweight")
+        print(sep)
+        row("h_cw, Mm",        round(hcw_,            digits))
+        row("m_cw, tons",      round(cw.mcw * 1e-3,  digits))
+
+        print(sep)
+        print("  Space Elevator")
+        print(sep)
+        row("n_climbers",      self.n_climbers)
+        row("m_climber, tons", round(self.m_climber * 1e-3, digits))
+        row("m0, tons",        round(self.m0 * 1e-3, digits))
+        row("h0, Mm",          round(h0 * 1e-6,      digits))
+        print(sep)
+
 
 # ---------------------------------------------------------------------------
 # ResplotSE
 # ---------------------------------------------------------------------------
 
-class ResplotSE(object):
+class ResplotSE:
     """
     Collection of plots for Space Elevator parameter analyses.
 
@@ -799,11 +884,11 @@ class ResplotSE(object):
             constforce = th.anchor_force
             if climbers:
                 ap_low, fp_low, sp_low = [], [], []
-                for climbforce, hstart, hend in se.climbers:
-                    constforce += climbforce
+                for cl in se.climbers:
+                    constforce += cl.force
                     ap, fp, sp = self._getDistPointsExp(
                         th._taper_low_fn, th.sections_low,
-                        constforce, hstart, hend, pl.R)
+                        constforce, cl.h, cl.h_top, pl.R)
                     ap_low += ap; fp_low += fp; sp_low += sp
             else:
                 ap_low, fp_low, sp_low = self._getDistPointsExp(
