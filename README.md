@@ -1,4 +1,7 @@
 # ClarkeLib
+
+![ClarkeLib Banner](docs/images/CLARKELIB-LOGO.png)
+
 An open library for [SageMath](http://www.sagemath.org/) that enables calculation of basic space elevator parameters and loads.
 
 How to use it?
